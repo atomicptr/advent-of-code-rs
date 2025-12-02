@@ -3,24 +3,23 @@ fn main() {
     println!("Part 1 result is {}", sum_invalid_ids(parse_input(input)));
 }
 
+fn split_num(n: &u64) -> Option<(u64, u64)> {
+    let digits = n.checked_ilog10().unwrap_or(0) + 1;
+
+    if digits % 2 == 0 {
+        let mid = (digits + 1) / 2;
+        let div = 10u64.pow(mid);
+        Some((n / div, n % div))
+    } else {
+        None
+    }
+}
+
 fn rule_duplicated_sequence(num: &u64) -> bool {
-    let chars: Vec<char> = num.to_string().chars().collect();
-
-    // cant have repeating sequence
-    if chars.len() % 2 == 1 {
-        return false;
+    match split_num(num) {
+        Some((left, right)) => left == right,
+        None => false,
     }
-
-    for i in 1..=(chars.len().div_ceil(2)) {
-        let prefix = chars.iter().take(i).collect::<Vec<&char>>();
-        let suffix = chars.iter().skip(i).collect::<Vec<&char>>();
-
-        if prefix == suffix {
-            return true;
-        }
-    }
-
-    false
 }
 
 fn find_invalid_ids(from: u64, to: u64) -> Vec<u64> {
