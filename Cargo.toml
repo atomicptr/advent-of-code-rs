@@ -3,6 +3,7 @@ name = "advent-of-code"
 version = "0.1.0"
 edition = "2021"
 
+########## 2023 ##########
 [[bin]]
 name = "2023-01"
 path = "2023/01/main.rs"
@@ -18,3 +19,8 @@ path = "2023/03/main.rs"
 [[bin]]
 name = "2023-04"
 path = "2023/04/main.rs"
+
+########## 2025 ##########
+[[bin]]
+name = "2025-01"
+path = "2025/01/main.rs"
