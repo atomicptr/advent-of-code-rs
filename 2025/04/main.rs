@@ -1,8 +1,11 @@
+const ACCESSIBLE_THRESHOLD: usize = 4;
+
 fn main() {
     let input = include_str!("./input.txt");
-    let g = Grid::from(input);
+    let mut g = Grid::from(input);
 
-    println!("Part 1 result is {}", g.num_accessible_with(4),);
+    println!("Part 1 result is {}", g.num_accessible());
+    println!("Part 2 result is {}", g.remove_all_accessible_with_count());
 }
 
 struct Grid {
@@ -28,6 +31,11 @@ impl Grid {
             .get(self.index(x, y))
             .expect(format!("{x}x{y} isn't accessible").as_str())
             .clone()
+    }
+
+    fn remove(&mut self, x: usize, y: usize) {
+        let index = self.index(x, y);
+        self.data[index] = false;
     }
 
     fn num_adjacent_rolls(&self, x: usize, y: usize) -> usize {
@@ -66,20 +74,59 @@ impl Grid {
         count
     }
 
-    fn num_accessible_with(&self, n: usize) -> usize {
-        self.data.iter().enumerate().fold(0, |acc, (index, roll)| {
-            if *roll {
+    fn num_accessible(&self) -> usize {
+        self.data
+            .iter()
+            .enumerate()
+            .filter(|(_, roll)| **roll)
+            .fold(0, |acc, (index, _)| {
                 let (x, y) = self.xy_from_index(index);
 
-                if self.num_adjacent_rolls(x, y) < n {
+                if self.num_adjacent_rolls(x, y) < ACCESSIBLE_THRESHOLD {
                     acc + 1
                 } else {
                     acc
                 }
-            } else {
-                acc
+            })
+    }
+
+    fn remove_accessible(&mut self) {
+        let coords = self
+            .data
+            .iter()
+            .enumerate()
+            .filter(|(_, roll)| **roll)
+            .filter_map(|(index, _)| {
+                let (x, y) = self.xy_from_index(index);
+
+                if self.num_adjacent_rolls(x, y) < ACCESSIBLE_THRESHOLD {
+                    return Some((x, y));
+                }
+
+                None
+            })
+            .collect::<Vec<(usize, usize)>>();
+
+        for (x, y) in coords {
+            self.remove(x, y);
+        }
+    }
+
+    fn remove_all_accessible_with_count(&mut self) -> usize {
+        let mut count = 0;
+
+        loop {
+            let num_accessible = self.num_accessible();
+
+            if num_accessible == 0 {
+                break;
             }
-        })
+
+            count += num_accessible;
+            self.remove_accessible();
+        }
+
+        count
     }
 }
 
@@ -136,8 +183,48 @@ mod test {
     }
 
     #[test]
-    fn test_num_rolls_with_atleast() {
+    fn test_num_accessible() {
         let g = Grid::from(DEMO_INPUT);
-        assert_eq!(13, g.num_accessible_with(4));
+        assert_eq!(13, g.num_accessible());
+    }
+
+    #[test]
+    fn test_remove_accessible() {
+        let mut g = Grid::from(DEMO_INPUT);
+
+        assert_eq!(13, g.num_accessible());
+        g.remove_accessible();
+
+        assert_eq!(12, g.num_accessible());
+        g.remove_accessible();
+
+        assert_eq!(7, g.num_accessible());
+        g.remove_accessible();
+
+        assert_eq!(5, g.num_accessible());
+        g.remove_accessible();
+
+        assert_eq!(2, g.num_accessible());
+        g.remove_accessible();
+
+        assert_eq!(1, g.num_accessible());
+        g.remove_accessible();
+
+        assert_eq!(1, g.num_accessible());
+        g.remove_accessible();
+
+        assert_eq!(1, g.num_accessible());
+        g.remove_accessible();
+
+        assert_eq!(1, g.num_accessible());
+        g.remove_accessible();
+
+        assert_eq!(0, g.num_accessible());
+    }
+
+    #[test]
+    fn test_remove_all_accessible_with_count() {
+        let mut g = Grid::from(DEMO_INPUT);
+        assert_eq!(43, g.remove_all_accessible_with_count());
     }
 }
