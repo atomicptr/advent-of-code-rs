@@ -4,7 +4,7 @@ fn main() {
     let inv = Inventory::from(input);
 
     println!("Part 1 result is {}", inv.count_still_fresh_ingredients());
-    println!("Part 12 result is {}", inv.count_fresh());
+    println!("Part 2 result is {}", inv.count_fresh());
 }
 
 struct Inventory {
