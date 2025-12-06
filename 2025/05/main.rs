@@ -3,12 +3,13 @@ fn main() {
 
     let inv = Inventory::from(input);
 
-    println!("Part 1 result is {}", inv.count_fresh());
+    println!("Part 1 result is {}", inv.count_still_fresh_ingredients());
+    println!("Part 12 result is {}", inv.count_fresh());
 }
 
 struct Inventory {
     fresh: Vec<(u64, u64)>,
-    available: Vec<u64>,
+    ingredients: Vec<u64>,
 }
 
 impl Inventory {
@@ -22,12 +23,33 @@ impl Inventory {
         false
     }
 
-    fn count_fresh(&self) -> usize {
-        self.available
+    fn count_still_fresh_ingredients(&self) -> usize {
+        self.ingredients
             .iter()
             .filter(|num| self.is_fresh(*num))
             .count()
     }
+
+    fn count_fresh(self) -> u64 {
+        let fresh = merge_ranges(self.fresh);
+        fresh
+            .iter()
+            .map(|(from, to)| to - from + 1)
+            .fold(0, |acc, n| acc + n)
+    }
+}
+
+fn merge_ranges(mut ranges: Vec<(u64, u64)>) -> Vec<(u64, u64)> {
+    ranges.sort_by_key(|r| r.0);
+    ranges
+        .into_iter()
+        .fold(vec![], |mut acc: Vec<(u64, u64)>, curr| {
+            match acc.last_mut() {
+                Some(last) if last.1 >= curr.0 - 1 => last.1 = last.1.max(curr.1),
+                _ => acc.push(curr),
+            }
+            acc
+        })
 }
 
 fn split_at_empty_line(input: &str) -> (&str, &str) {
@@ -48,7 +70,7 @@ impl<'a> From<&'a str> for Inventory {
 
         let mut inv = Inventory {
             fresh: Vec::with_capacity(fresh.len()),
-            available: Vec::with_capacity(available.len()),
+            ingredients: Vec::with_capacity(available.len()),
         };
 
         for line in fresh.trim().lines() {
@@ -57,7 +79,7 @@ impl<'a> From<&'a str> for Inventory {
         }
 
         for line in available.trim().lines() {
-            inv.available.push(line.parse().unwrap());
+            inv.ingredients.push(line.parse().unwrap());
         }
 
         inv
@@ -86,12 +108,18 @@ mod test {
         let inv = Inventory::from(DEMO_INPUT);
 
         assert_eq!(vec![(3, 5), (10, 14), (16, 20), (12, 18)], inv.fresh);
-        assert_eq!(vec![1, 5, 8, 11, 17, 32], inv.available);
+        assert_eq!(vec![1, 5, 8, 11, 17, 32], inv.ingredients);
+    }
+
+    #[test]
+    fn test_count_still_fresh_ingredients() {
+        let inv = Inventory::from(DEMO_INPUT);
+        assert_eq!(3, inv.count_still_fresh_ingredients());
     }
 
     #[test]
     fn test_count_fresh() {
         let inv = Inventory::from(DEMO_INPUT);
-        assert_eq!(3, inv.count_fresh());
+        assert_eq!(14, inv.count_fresh());
     }
 }
