@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 fn main() {
     let input = include_str!("./input.txt");
@@ -151,21 +151,6 @@ impl Machine {
         }
     }
 
-    fn clone_with_new_beam(&self, (x, y): (usize, usize)) -> Self {
-        let index = self.index(x, y);
-        assert!(matches!(self.grid[index], Cell::Empty));
-
-        let mut beams = HashSet::new();
-        beams.insert((x, y));
-
-        Self {
-            grid: self.grid.clone(),
-            width: self.width,
-            beams,
-            num_splits: 0,
-        }
-    }
-
     fn step(&mut self) -> bool {
         let result = self.advance_beams();
 
@@ -187,56 +172,50 @@ impl Machine {
         has_new
     }
 
-    fn split_timeline(mut self) -> Vec<Self> {
-        let result = self.advance_beams();
-        let mut timelines = Vec::new();
-
-        // for each split produce a new timeline
-        for &(x, y) in &result.split_beams {
-            timelines.push(self.clone_with_new_beam((x, y)));
-        }
-
-        for &(x, y) in &result.beams {
-            let idx = self.index(x, y);
-            assert!(matches!(self.grid[idx], Cell::Empty));
-            self.grid[idx] = Cell::Beam;
-        }
-
-        if !result.beams.is_empty() {
-            self.beams = result.beams;
-            timelines.push(self);
-        }
-
-        timelines
-    }
-
     fn finish(&mut self) {
         while self.step() {}
     }
 
     fn finish_timelines(self) -> usize {
-        let mut active = vec![self];
-        let mut dead = 0;
+        let start = self.beams.iter().next().unwrap();
+        let mut memo = HashMap::new();
+        self.dfs(*start, &mut memo)
+    }
 
-        while !active.is_empty() {
-            let mut next = Vec::new();
-
-            for timeline in active {
-                let branches = timeline.split_timeline();
-
-                if branches.is_empty() {
-                    dead += 1;
-                }
-
-                for branch in branches {
-                    next.push(branch);
-                }
-            }
-
-            active = next;
+    fn dfs(&self, (x, y): (usize, usize), memo: &mut HashMap<(usize, usize), usize>) -> usize {
+        if y + 1 >= self.height() {
+            return 1;
         }
 
-        dead
+        if let Some(&cached) = memo.get(&(x, y)) {
+            return cached;
+        }
+
+        let below = self.index(x, y + 1);
+        let result = match self.grid[below] {
+            Cell::Empty => self.dfs((x, y + 1), memo),
+            Cell::Splitter => {
+                let mut sum = 0;
+
+                if x > 0 {
+                    let left = self.index(x - 1, y + 1);
+                    if matches!(self.grid[left], Cell::Empty) {
+                        sum += self.dfs((x - 1, y + 1), memo);
+                    }
+                }
+
+                let right = self.index(x + 1, y + 1);
+                if matches!(self.grid[right], Cell::Empty) {
+                    sum += self.dfs((x + 1, y + 1), memo);
+                }
+                sum
+            }
+            _ => 0,
+        };
+
+        memo.insert((x, y), result);
+
+        result
     }
 
     fn to_string(&self) -> String {
