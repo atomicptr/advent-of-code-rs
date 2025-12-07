@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 fn main() {
     let input = include_str!("./input.txt");
 
@@ -48,7 +50,14 @@ impl Cell {
 struct Machine {
     grid: Vec<Cell>,
     width: usize,
-    beams: Vec<(usize, usize)>,
+    beams: HashSet<(usize, usize)>,
+    num_splits: usize,
+}
+
+#[derive(Debug)]
+struct BeamResult {
+    beams: HashSet<(usize, usize)>,
+    split_beams: HashSet<(usize, usize)>,
     num_splits: usize,
 }
 
@@ -68,198 +77,137 @@ impl<'a> From<&'a str> for Machine {
             .map(|(index, _)| index)
             .unwrap();
 
+        let mut beams = HashSet::new();
+        beams.insert(xy_from_index(width, start_index));
+
         Self {
             grid,
             width,
-            beams: vec![xy_from_index(width, start_index)],
+            beams,
             num_splits: 0,
         }
     }
 }
 
 impl Machine {
-    fn xy_from_index(&self, index: usize) -> (usize, usize) {
-        xy_from_index(self.width, index)
-    }
-
+    #[inline]
     fn index(&self, x: usize, y: usize) -> usize {
         y * self.width + x
     }
 
+    #[inline]
     fn height(&self) -> usize {
         (self.grid.len() + self.width - 1) / self.width
     }
 
-    fn is_empty(&self, index: usize) -> bool {
-        self.grid
-            .get(index)
-            .map(|cell| matches!(cell, Cell::Empty))
-            .unwrap_or(false)
-    }
+    fn advance_beams(&self) -> BeamResult {
+        let mut beams = HashSet::new();
+        let mut split_beams = HashSet::new();
+        let mut num_splits = 0;
 
-    fn set(&mut self, index: usize, cell: Cell) {
-        assert!(matches!(self.grid.get(index).unwrap(), Cell::Empty));
-
-        self.grid[index] = cell;
-    }
-
-    fn clone_with_new_beam(&self, (x, y): (usize, usize)) -> Self {
-        let index = self.index(x, y);
-        let mut new = self.clone();
-
-        assert!(matches!(new.grid[index], Cell::Empty));
-        new.grid[index] = Cell::Beam;
-        new.beams.clear();
-        new.beams.push((x, y));
-        new.num_splits = 0;
-
-        new
-    }
-
-    fn split_timeline(mut self) -> Vec<Self> {
-        let mut timelines = vec![];
-        let mut new_beams = vec![];
-
-        for (beam_x, beam_y) in &self.beams {
+        for &(beam_x, beam_y) in &self.beams {
             if beam_y + 1 >= self.height() {
                 continue;
             }
 
-            let below_beam = self.index(beam_x.clone(), beam_y + 1);
+            let new_y = beam_y + 1;
+            let below = self.index(beam_x, new_y);
 
-            let beam_y = beam_y + 1;
-
-            match self.grid.get(below_beam) {
-                Some(Cell::Empty) => new_beams.push((*beam_x, beam_y)),
-                Some(Cell::Splitter) => {
-                    // left beam
-                    if let Some(new_beam_x) = beam_x.checked_sub(1) {
-                        if let Some(cell) = self.grid.get(self.index(new_beam_x, beam_y))
-                            && matches!(cell, Cell::Empty)
-                        {
-                            timelines.push(self.clone_with_new_beam((new_beam_x, beam_y)));
-                        }
-                    }
-
-                    // right beam
-                    if let Some(new_beam_x) = beam_x.checked_add(1) {
-                        if let Some(cell) = self.grid.get(self.index(new_beam_x, beam_y))
-                            && matches!(cell, Cell::Empty)
-                        {
-                            timelines.push(self.clone_with_new_beam((new_beam_x, beam_y)));
-                        }
-                    }
+            match self.grid.get(below) {
+                Some(Cell::Empty) => {
+                    beams.insert((beam_x, new_y));
                 }
-                _ => {
-                    continue;
-                }
-            }
-        }
-
-        // make sure we dont have duplicates
-        let new_beams: Vec<_> = new_beams
-            .iter()
-            .cloned()
-            .collect::<std::collections::HashSet<_>>()
-            .into_iter()
-            .collect();
-
-        for (beam_x, beam_y) in &new_beams {
-            let index = self.index(*beam_x, *beam_y);
-            if let Some(cell) = self.grid.get(index) {
-                assert!(
-                    matches!(cell, Cell::Empty),
-                    "Expected empty at {beam_x}x{beam_y} but found {cell:?}"
-                );
-
-                self.grid[index] = Cell::Beam;
-            }
-        }
-
-        let timeline_still_alive = new_beams.len() > 0;
-
-        self.beams.extend(new_beams);
-
-        // continue our timeline if something happened
-        if timeline_still_alive {
-            timelines.push(self);
-        }
-
-        timelines
-    }
-
-    fn step(&mut self) -> bool {
-        let mut new_beams = vec![];
-
-        for (beam_x, beam_y) in &self.beams {
-            if beam_y + 1 >= self.height() {
-                continue;
-            }
-
-            let below_beam = self.index(beam_x.clone(), beam_y + 1);
-
-            let beam_y = beam_y + 1;
-
-            match self.grid.get(below_beam) {
-                Some(Cell::Empty) => new_beams.push((*beam_x, beam_y)),
                 Some(Cell::Splitter) => {
                     let mut did_split = false;
 
-                    // left beam
-                    if let Some(new_beam_x) = beam_x.checked_sub(1) {
-                        if let Some(cell) = self.grid.get(self.index(new_beam_x, beam_y))
-                            && matches!(cell, Cell::Empty)
-                        {
-                            new_beams.push((new_beam_x, beam_y));
+                    // left
+                    if let Some(left_x) = beam_x.checked_sub(1) {
+                        if matches!(self.grid.get(self.index(left_x, new_y)), Some(Cell::Empty)) {
+                            split_beams.insert((left_x, new_y));
                             did_split = true;
                         }
                     }
 
-                    // right beam
-                    if let Some(new_beam_x) = beam_x.checked_add(1) {
-                        if let Some(cell) = self.grid.get(self.index(new_beam_x, beam_y))
-                            && matches!(cell, Cell::Empty)
-                        {
-                            new_beams.push((new_beam_x, beam_y));
+                    // right
+                    if let Some(right_x) = beam_x.checked_add(1) {
+                        if matches!(self.grid.get(self.index(right_x, new_y)), Some(Cell::Empty)) {
+                            split_beams.insert((right_x, new_y));
                             did_split = true;
                         }
                     }
 
                     if did_split {
-                        self.num_splits += 1;
+                        num_splits += 1;
                     }
                 }
-                _ => {
-                    continue;
-                }
+                _ => {}
             }
         }
 
-        let has_new_beams = new_beams.len() > 0;
+        BeamResult {
+            beams,
+            split_beams,
+            num_splits,
+        }
+    }
 
-        // make sure we dont have duplicates
-        let new_beams: Vec<_> = new_beams
-            .iter()
-            .cloned()
-            .collect::<std::collections::HashSet<_>>()
-            .into_iter()
-            .collect();
+    fn clone_with_new_beam(&self, (x, y): (usize, usize)) -> Self {
+        let index = self.index(x, y);
+        assert!(matches!(self.grid[index], Cell::Empty));
 
-        for (beam_x, beam_y) in &new_beams {
-            let index = self.index(*beam_x, *beam_y);
-            if let Some(cell) = self.grid.get(index) {
-                assert!(
-                    matches!(cell, Cell::Empty),
-                    "Expected empty at {beam_x}x{beam_y} but found {cell:?}"
-                );
+        let mut beams = HashSet::new();
+        beams.insert((x, y));
 
-                self.grid[index] = Cell::Beam;
-            }
+        Self {
+            grid: self.grid.clone(),
+            width: self.width,
+            beams,
+            num_splits: 0,
+        }
+    }
+
+    fn step(&mut self) -> bool {
+        let result = self.advance_beams();
+
+        if !result.split_beams.is_empty() {
+            self.num_splits += result.num_splits;
         }
 
-        self.beams.extend(new_beams);
+        let mut new_beams = result.beams;
+        new_beams.extend(result.split_beams);
 
-        has_new_beams
+        for &(x, y) in &new_beams {
+            let idx = self.index(x, y);
+            assert!(matches!(self.grid[idx], Cell::Empty));
+            self.grid[idx] = Cell::Beam;
+        }
+
+        let has_new = !new_beams.is_empty();
+        self.beams = new_beams;
+        has_new
+    }
+
+    fn split_timeline(mut self) -> Vec<Self> {
+        let result = self.advance_beams();
+        let mut timelines = Vec::new();
+
+        // for each split produce a new timeline
+        for &(x, y) in &result.split_beams {
+            timelines.push(self.clone_with_new_beam((x, y)));
+        }
+
+        for &(x, y) in &result.beams {
+            let idx = self.index(x, y);
+            assert!(matches!(self.grid[idx], Cell::Empty));
+            self.grid[idx] = Cell::Beam;
+        }
+
+        if !result.beams.is_empty() {
+            self.beams = result.beams;
+            timelines.push(self);
+        }
+
+        timelines
     }
 
     fn finish(&mut self) {
