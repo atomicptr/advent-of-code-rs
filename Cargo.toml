@@ -1,7 +1,7 @@
 [package]
 name = "advent-of-code"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 ########## 2023 ##########
 [[bin]]
@@ -44,3 +44,10 @@ path = "2025/05/main.rs"
 [[bin]]
 name = "2025-06"
 path = "2025/06/main.rs"
+
+[[bin]]
+name = "2025-07"
+path = "2025/07/main.rs"
+
+[dependencies]
+pretty_assertions = "1.4.1"
